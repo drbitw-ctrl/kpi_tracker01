@@ -243,4 +243,100 @@ if 'month' in group_team.columns:
 # ---------------------
 # Top KPI metrics (wide)
 # ---------------------
-st.subheader("Top
+st.subheader("Top KPIs (filtered selection)")
+total_tasks = int(filtered['_task_id'].count())
+avg_eff = group_team['Eff_mean'].mean() if 'Eff_mean' in group_team.columns else None
+avg_qs = group_team['QS_mean'].mean() if 'QS_mean' in group_team.columns else None
+completed_tasks = int(filtered[filtered['Status'].str.lower() == 'completed'].shape[0]) if 'Status' in filtered.columns else None
+
+c1,c2,c3,c4 = st.columns(4)
+c1.metric("Total tasks (filtered)", total_tasks)
+c2.metric("Completed (filtered)", completed_tasks if completed_tasks is not None else "N/A")
+c3.metric("Avg Eff (team avg)", f"{avg_eff:.2%}" if pd.notna(avg_eff) else "N/A")
+c4.metric("Avg QS (team avg)", f"{avg_qs:.2%}" if pd.notna(avg_qs) else "N/A")
+
+st.markdown("---")
+
+# ---------------------
+# Individual KPI line charts (per-member)
+# ---------------------
+st.header("Individual KPI Tracking (per member) — Line charts")
+# For each metric create a line chart with color=Name
+def plot_line(df_plot, x_col, y_col, title, is_pct=False):
+    if df_plot.empty:
+        st.write(f"No data to plot for {title}")
+        return
+    fig = px.line(df_plot, x=x_col, y=y_col, color='Name', markers=True, title=title)
+    if is_pct:
+        fig.update_yaxes(tickformat=".0%")
+    st.plotly_chart(fig, use_container_width=True)
+
+# plot per-member metrics using group_ind
+if not group_ind.empty:
+    plot_line(group_ind, 'month', 'QS_mean', 'Average Quality Score (per member)', is_pct=True)
+    plot_line(group_ind, 'month', 'Rev_mean', 'Average Revision Rate (per member)', is_pct=True)
+    plot_line(group_ind, 'month', 'Tasks', 'Total Completed Tasks (per member)', is_pct=False)
+    plot_line(group_ind, 'month', 'OnTime_pct', 'On-time Delivery (per member)', is_pct=True)
+    plot_line(group_ind, 'month', 'Eff_mean', 'Actual Work Efficiency (per member)', is_pct=True)
+    plot_line(group_ind, 'month', 'Manhours', 'Man-hours Spent (per member)', is_pct=False)
+else:
+    st.write("No per-member aggregated data to plot.")
+
+st.markdown("---")
+
+# ---------------------
+# Team KPI line charts
+# ---------------------
+st.header("Team KPI Tracking (averaged across members) — Line charts")
+if not group_team.empty:
+    # convert month to string for nicer axis tick labels if it's a Timestamp
+    plot_line(group_team, 'month', 'QS_mean', 'Team Average Quality Score', is_pct=True)
+    plot_line(group_team, 'month', 'Rev_mean', 'Team Average Revision Rate', is_pct=True)
+    plot_line(group_team, 'month', 'Tasks', 'Team Total Completed Tasks', is_pct=False)
+    plot_line(group_team, 'month', 'OnTime_pct', 'Team On-time Delivery', is_pct=True)
+    plot_line(group_team, 'month', 'Eff_mean', 'Team Actual Work Efficiency', is_pct=True)
+    plot_line(group_team, 'month', 'Manhours', 'Team Man-hours Spent', is_pct=False)
+else:
+    st.write("No team aggregated data to plot.")
+
+st.markdown("---")
+
+# ---------------------
+# Leaderboards side-by-side (latest month)
+# ---------------------
+st.header("Leaderboards — Latest Month")
+if not group_ind.empty:
+    latest = group_ind['month'].max()
+    latest_df = group_ind[group_ind['month'] == latest].copy()
+    if latest_df.empty:
+        st.write("No data for latest month after filtering.")
+    else:
+        lb_cols = {
+            "Efficiency (%)": ("Eff_mean", True),
+            "Quality Score (%)": ("QS_mean", True),
+            "On-time Delivery (%)": ("OnTime_pct", True),
+            "Tasks Completed": ("Tasks", False),
+            "Man-hours Spent": ("Manhours", False)
+        }
+        cols = st.columns(len(lb_cols))
+        for i, (title, (colname, is_pct)) in enumerate(lb_cols.items()):
+            df_lb = latest_df[['Name', colname]].sort_values(by=colname, ascending=False).reset_index(drop=True)
+            display_df = df_lb.copy()
+            if is_pct:
+                display_df[colname] = display_df[colname].apply(lambda v: f"{v:.1%}" if pd.notna(v) else "N/A")
+            else:
+                display_df[colname] = display_df[colname].apply(lambda v: f"{v:.0f}" if pd.notna(v) else "N/A")
+            cols[i].subheader(title)
+            cols[i].dataframe(display_df, use_container_width=True)
+else:
+    st.write("No grouped data for leaderboards.")
+
+st.markdown("---")
+st.subheader("Filtered data (table)")
+st.dataframe(filtered.reset_index(drop=True))
+
+# csv download
+csv = filtered.to_csv(index=False).encode('utf-8')
+st.download_button("Download filtered CSV", data=csv, file_name="filtered_kpis.csv", mime="text/csv")
+
+st.markdown("Notes: If percentage columns look off, they may be entered either as fractions (0.92) or percent points (92). The app attempts to normalize automatically. If you prefer a specific conversion, tell me and I will lock it to that behavior.")
