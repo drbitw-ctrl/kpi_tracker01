@@ -8,7 +8,7 @@ import plotly.express as px
 @st.cache_data
 def load_data(file):
     df = pd.read_excel(file, sheet_name="5")
-    # Ensure date column is parsed
+    # Ensure date columns are parsed
     df['Date Completed'] = pd.to_datetime(df['Date Completed'], errors='coerce')
     df['Work Duration'] = pd.to_datetime(df['Work Duration'], errors='coerce')
     return df
@@ -22,13 +22,12 @@ if uploaded_file:
     # =========================
     # Data Preprocessing
     # =========================
-    # Extract month-year for grouping
     df['Month'] = df['Date Completed'].dt.to_period("M").astype(str)
 
-    # On-time Delivery (1 = on time, 0 = late, NaN = no check possible)
+    # On-time Delivery (1 = on time, 0 = late)
     df['OnTime'] = (df['Date Completed'] <= df['Work Duration']).astype(int)
 
-    # Convert metrics to percentages
+    # Convert metrics
     df['QS%'] = pd.to_numeric(df['QS%'], errors='coerce')
     df['Efficiency'] = pd.to_numeric(df['Efficiency'], errors='coerce')
     df['RevisionRate'] = pd.to_numeric(df['Revision/s'], errors='coerce')
@@ -46,6 +45,27 @@ if uploaded_file:
     # =========================
     st.header("📈 Individual KPI Tracking (per member)")
 
+    # Aggregate metrics
+    ind_group = (
+        filtered_df.groupby(["Month", "Name"])
+        .agg({
+            "QS%": "mean",
+            "RevisionRate": "mean",
+            "OnTime": "mean",
+            "Efficiency": "mean",
+            "Actual Work Hours": "sum"
+        })
+        .reset_index()
+    )
+
+    # Add task counts
+    task_counts = (
+        filtered_df.groupby(["Month", "Name"])
+        .size()
+        .reset_index(name="Task Count")
+    )
+    ind_group = ind_group.merge(task_counts, on=["Month", "Name"])
+
     kpi_mapping = {
         "Average Quality Score (%)": "QS%",
         "Average Revision Rate (%)": "RevisionRate",
@@ -54,21 +74,6 @@ if uploaded_file:
         "Actual Work Efficiency (%)": "Efficiency",
         "Man-hours Spent (total)": "Actual Work Hours"
     }
-
-    # Prepare grouped data
-    ind_group = (
-        filtered_df.groupby(["Month", "Name"])
-        .agg({
-            "QS%": "mean",
-            "RevisionRate": "mean",
-            "OnTime": "mean",
-            "Efficiency": "mean",
-            "Actual Work Hours": "sum",
-            "Task Name": "count"
-        })
-        .rename(columns={"Task Name": "Task Count"})
-        .reset_index()
-    )
 
     # Plot individual KPIs
     for title, col in kpi_mapping.items():
@@ -80,7 +85,6 @@ if uploaded_file:
             markers=True,
             title=title
         )
-        # Format as percentage if needed
         if "%" in title:
             fig.update_layout(yaxis_tickformat=".0%")
         st.plotly_chart(fig, use_container_width=True)
@@ -97,12 +101,18 @@ if uploaded_file:
             "RevisionRate": "mean",
             "OnTime": "mean",
             "Efficiency": "mean",
-            "Actual Work Hours": "sum",
-            "Task Name": "count"
+            "Actual Work Hours": "sum"
         })
-        .rename(columns={"Task Name": "Task Count"})
         .reset_index()
     )
+
+    # Add task counts
+    task_counts_team = (
+        filtered_df.groupby("Month")
+        .size()
+        .reset_index(name="Task Count")
+    )
+    team_group = team_group.merge(task_counts_team, on="Month")
 
     for title, col in kpi_mapping.items():
         fig = px.line(
@@ -124,7 +134,6 @@ if uploaded_file:
     latest_month = ind_group['Month'].max()
     latest_data = ind_group[ind_group['Month'] == latest_month].copy()
 
-    # Format leaderboards
     leaderboard_cols = {
         "Efficiency (%)": "Efficiency",
         "Quality Score (%)": "QS%",
