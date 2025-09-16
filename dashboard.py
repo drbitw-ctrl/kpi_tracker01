@@ -200,3 +200,41 @@ if not group_ind.empty:
             tmp[colname] = tmp[colname].apply(lambda v: f"{int(v):,}" if pd.notna(v) else "N/A")
         cols[i].subheader(title)
         cols[i].dataframe(tmp.reset_index(drop=True), use_container_width=True)
+# ---------------- Streamlit App ----------------
+st.title("📊 KPI Dashboard")
+
+# Sidebar filters
+st.sidebar.header("Filters")
+members = st.sidebar.multiselect("Select team members:", df["Member"].unique(), default=df["Member"].unique())
+flt = df[df["Member"].isin(members)]
+
+# --- Summary KPIs ---
+st.header("📌 Summary KPIs")
+
+if not flt.empty:
+    latest_month = flt["month"].max()
+    total_tasks = len(flt)
+    avg_qs = flt["QS_frac"].mean()
+    avg_rev = flt["Rev_frac"].mean()
+    avg_eff = flt["Eff_frac"].mean()
+    avg_on = flt["OnTime"].mean()
+    total_manhours = flt["Actual Work Hours"].sum()
+
+    kpis = {
+        "Total Tasks": f"{total_tasks:,}",
+        "Avg Quality Score": f"{avg_qs:.1%}" if pd.notna(avg_qs) else "N/A",
+        "Avg Revision Rate": f"{avg_rev:.1%}" if pd.notna(avg_rev) else "N/A",
+        "Avg Efficiency": f"{avg_eff:.1%}" if pd.notna(avg_eff) else "N/A",
+        "On-time Delivery": f"{avg_on:.1%}" if pd.notna(avg_on) else "N/A",
+        "Total Man-hours": f"{int(total_manhours):,}",
+    }
+
+    cols = st.columns(len(kpis))
+    for i, (label, val) in enumerate(kpis.items()):
+        with cols[i]:
+            st.metric(label, val)
+else:
+    st.info("No data available to compute summary KPIs.")
+
+# ---------------- Individual KPI Tracking ----------------
+st.header("📈 Individual KPI Tracking")
