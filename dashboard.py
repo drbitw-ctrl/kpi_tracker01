@@ -144,6 +144,11 @@ def clean_and_prepare(df):
         df['_task_id'] = df['Ref. number']
     else:
         df['_task_id'] = range(len(df))
+    if "Target Work Hours" in df.columns and "Actual Work Hours" in df.columns:
+        df["Eff_frac"] = df["Target Work Hours"] / df["Actual Work Hours"]
+    else:
+        df["Eff_frac"] = pd.NA
+
 
     return df
 
